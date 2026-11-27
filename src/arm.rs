@@ -6,6 +6,16 @@ use serde_json::Value;
 
 const ARM: &str = "https://management.azure.com";
 
+/// ARM base URL. `AZ_STORAGE_ARM_URL` overrides it for offline demos and tests
+/// against a local mock; defaults to Azure Resource Manager.
+fn arm() -> String {
+    std::env::var("AZ_STORAGE_ARM_URL")
+        .ok()
+        .filter(|v| !v.is_empty())
+        .map(|v| v.trim_end_matches('/').to_string())
+        .unwrap_or_else(|| ARM.to_string())
+}
+
 async fn get_json(http: &reqwest::Client, token: &str, url: &str) -> Result<Value> {
     let resp = http.get(url).bearer_auth(token).send().await?;
     parse(resp).await
@@ -41,7 +51,7 @@ pub async fn list_subscriptions(http: &reqwest::Client, token: &str) -> Result<V
     let items = get_paged(
         http,
         token,
-        format!("{ARM}/subscriptions?api-version=2022-12-01"),
+        format!("{}/subscriptions?api-version=2022-12-01", arm()),
     )
     .await?;
     let mut subs: Vec<Subscription> = items
@@ -63,7 +73,8 @@ pub async fn list_storage_accounts(
     sub: &Subscription,
 ) -> Result<Vec<StorageAccountNode>> {
     let url = format!(
-        "{ARM}/subscriptions/{}/providers/Microsoft.Storage/storageAccounts?api-version=2023-01-01",
+        "{}/subscriptions/{}/providers/Microsoft.Storage/storageAccounts?api-version=2023-01-01",
+        arm(),
         sub.id
     );
     let items = get_paged(http, token, url).await?;
@@ -103,7 +114,7 @@ pub async fn list_storage_accounts(
 
 /// `POST .../listKeys` → the value of `key1` (or the first available key).
 pub async fn list_keys(http: &reqwest::Client, token: &str, account_id: &str) -> Result<String> {
-    let url = format!("{ARM}{account_id}/listKeys?api-version=2023-01-01");
+    let url = format!("{}{account_id}/listKeys?api-version=2023-01-01", arm());
     let resp = http
         .post(url)
         .bearer_auth(token)
