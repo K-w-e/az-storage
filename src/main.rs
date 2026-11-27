@@ -24,7 +24,7 @@ use worker::{Command, Event};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Config letta prima di entrare in modalità TUI (errori leggibili in shell).
+    // Load config before entering TUI mode (errors remain readable in the shell).
     let config = config::load()?;
 
     let busy = Arc::new(AtomicUsize::new(0));
@@ -32,8 +32,8 @@ async fn main() -> Result<()> {
     let (tx_evt, rx_evt) = mpsc::unbounded_channel::<Event>();
     tokio::spawn(worker::run(rx_cmd, tx_evt, busy.clone()));
 
-    // `ratatui::init` abilita raw mode + alternate screen e installa un panic
-    // hook che li ripristina (disable_raw_mode + LeaveAlternateScreen).
+    // `ratatui::init` enables raw mode + alternate screen and installs a panic
+    // hook that restores them (disable_raw_mode + LeaveAlternateScreen).
     let mut terminal = ratatui::init();
     let ratatui_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
@@ -97,7 +97,7 @@ async fn run(
                     dirty = true;
                 }
                 Some(Ok(TermEvent::Mouse(m))) => {
-                    // Movimenti/drag non richiedono redraw.
+                    // Movement/drag events do not require a redraw.
                     if !matches!(m.kind, MouseEventKind::Moved | MouseEventKind::Drag(_)) {
                         send(app.on_mouse(m));
                         dirty = true;
@@ -114,7 +114,7 @@ async fn run(
             },
             Some(ev) = rx.recv() => {
                 send(app.on_backend(ev));
-                // Drena gli eventi in coda per ridurre i redraw.
+                // Drain queued events to reduce redraws.
                 while let Ok(ev) = rx.try_recv() {
                     send(app.on_backend(ev));
                 }
@@ -126,7 +126,7 @@ async fn run(
                     send(cmds);
                     dirty = true;
                 }
-                // Redraw reattivo: solo per spinner o scadenza messaggi di stato.
+                // Redraw only for the spinner or when a status message expires.
                 let has_status = app.status_text().is_some();
                 if app.is_busy() || has_status != had_status {
                     app.spinner = app.spinner.wrapping_add(1);

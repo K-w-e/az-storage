@@ -1,5 +1,5 @@
-//! Async Backend Worker: riceve `Command` dalla UI, esegue I/O in task
-//! `tokio::spawn` e restituisce `Event`.
+//! Async backend worker: receives `Command`s from the UI, performs I/O in
+//! `tokio::spawn` tasks, and returns `Event`s.
 
 use crate::arm;
 use crate::auth::{self, ARM_RESOURCE, CliToken, STORAGE_RESOURCE};
@@ -72,7 +72,7 @@ pub enum Command {
     CancelTransfers,
 }
 
-/// Oggetto da scaricare: singolo blob o tutto ciò che sta sotto un prefisso.
+/// Object to download: a single blob or everything under a prefix.
 #[derive(Debug, Clone)]
 pub enum DownloadSpec {
     Blob(String),
@@ -148,9 +148,9 @@ struct Worker {
     http: reqwest::Client,
     storage: StorageClient,
     tx: UnboundedSender<Event>,
-    /// Cache token CLI: chiave (resource, tenant).
+    /// CLI token cache: key is (resource, tenant).
     tokens: Mutex<HashMap<(String, Option<String>), CliToken>>,
-    /// Client senza timeout totale per upload/download di file grandi.
+    /// Client without a total timeout for large file uploads/downloads.
     xfer: StorageClient,
     next_id: AtomicU64,
     cancels: std::sync::Mutex<HashMap<u64, Arc<AtomicBool>>>,
@@ -168,13 +168,21 @@ pub async fn run(
     let http = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(10))
         .timeout(Duration::from_secs(60))
-        .user_agent(concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!(
+            env!("CARGO_PKG_NAME"),
+            "/",
+            env!("CARGO_PKG_VERSION")
+        ))
         .build()
         .expect("http client");
     let xfer_http = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(10))
         .read_timeout(Duration::from_secs(120))
-        .user_agent(concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!(
+            env!("CARGO_PKG_NAME"),
+            "/",
+            env!("CARGO_PKG_VERSION")
+        ))
         .build()
         .expect("http client");
     let w = Arc::new(Worker {
@@ -213,13 +221,13 @@ impl Worker {
         Ok(tok)
     }
 
-    /// Risolve la credenziale data-plane: listKeys (key1) → fallback Bearer.
+    /// Resolve the data-plane credential: listKeys (key1) → Bearer fallback.
     async fn credential(&self, acct: &StorageAccountNode) -> Result<AuthCredential> {
         if let Some(c) = &acct.credential {
             return Ok(c.clone());
         }
         let AccountSource::AzureSubscription { tenant_id, .. } = &acct.source else {
-            bail!("nessuna credenziale per {}", acct.name);
+            bail!("no credentials for {}", acct.name);
         };
         let tenant = tenant_id.as_deref();
         let mut cred = None;
@@ -233,7 +241,7 @@ impl Worker {
                     })
                 }
                 Err(e) => self.emit(Event::Info(format!(
-                    "listKeys non disponibile per {} ({e:#}); uso Entra ID",
+                    "listKeys unavailable for {} ({e:#}); using Entra ID",
                     acct.name
                 ))),
             }
@@ -264,7 +272,7 @@ impl Worker {
             Service::Queue => &acct.queue_endpoint,
         };
         if endpoint.is_empty() {
-            bail!("servizio non disponibile su {}", acct.name);
+            bail!("service unavailable for {}", acct.name);
         }
         let cred = self.credential(acct).await?;
         f(self.storage.clone(), endpoint.clone(), cred).await
@@ -404,8 +412,8 @@ impl Worker {
                     })
                     .await;
                 match r {
-                    Ok(()) => self.emit(Event::Info(format!("Eliminato {container}/{blob}"))),
-                    Err(e) => self.emit(Event::Error(format!("Delete blob fallito: {e:#}"))),
+                    Ok(()) => self.emit(Event::Info(format!("Deleted {container}/{blob}"))),
+                    Err(e) => self.emit(Event::Error(format!("Delete blob failed: {e:#}"))),
                 }
                 self.list_blobs(account, container, prefix).await;
             }
@@ -426,8 +434,8 @@ impl Worker {
                     })
                     .await;
                 match r {
-                    Ok(()) => self.emit(Event::Info(format!("Messaggio {id} eliminato"))),
-                    Err(e) => self.emit(Event::Error(format!("Delete message fallito: {e:#}"))),
+                    Ok(()) => self.emit(Event::Info(format!("Message {id} deleted"))),
+                    Err(e) => self.emit(Event::Error(format!("Delete message failed: {e:#}"))),
                 }
                 self.peek(account, queue).await;
             }
@@ -471,8 +479,8 @@ impl Worker {
                     })
                     .await;
                 match r {
-                    Ok(()) => self.emit(Event::Info(format!("Coda {queue} svuotata"))),
-                    Err(e) => self.emit(Event::Error(format!("Clear queue fallito: {e:#}"))),
+                    Ok(()) => self.emit(Event::Info(format!("Queue {queue} cleared"))),
+                    Err(e) => self.emit(Event::Error(format!("Clear queue failed: {e:#}"))),
                 }
                 self.peek(account, queue).await;
             }
@@ -528,7 +536,7 @@ impl Worker {
 // Transfers
 // ---------------------------------------------------------------------------
 
-/// Emissione progress limitata (~10/s) per non saturare il canale UI.
+/// Rate-limit progress updates (~10/s) to avoid saturating the UI channel.
 struct Reporter<'a> {
     w: &'a Worker,
     id: u64,
@@ -552,7 +560,7 @@ impl Reporter<'_> {
     }
 }
 
-/// Converte un path relativo di blob in path locale sicuro (no `..`/assoluti).
+/// Convert a relative blob path to a safe local path (no `..` or absolute paths).
 fn safe_join(base: &Path, rel: &str) -> Option<PathBuf> {
     let mut out = base.to_path_buf();
     for part in rel.split('/').filter(|p| !p.is_empty() && *p != ".") {
@@ -622,7 +630,7 @@ impl Worker {
 
     async fn blob_target(&self, acct: &StorageAccountNode) -> Result<(String, AuthCredential)> {
         if acct.blob_endpoint.is_empty() {
-            bail!("Blob service non disponibile su {}", acct.name);
+            bail!("Blob service unavailable for {}", acct.name);
         }
         Ok((acct.blob_endpoint.clone(), self.credential(acct).await?))
     }
@@ -642,14 +650,14 @@ impl Worker {
                 endpoint: &ep,
                 cred: &cred,
             };
-            // (blob, destinazione locale, size)
+            // (blob, local destination, size)
             let (label, files): (String, Vec<(String, PathBuf, u64)>) = match &spec {
                 DownloadSpec::Blob(name) => {
                     let size = self
                         .storage
                         .blob_size(&t, &container, name)
                         .await?
-                        .ok_or_else(|| anyhow::anyhow!("blob {name} non trovato"))?;
+                        .ok_or_else(|| anyhow::anyhow!("blob {name} not found"))?;
                     (name.clone(), vec![(name.clone(), dest.clone(), size)])
                 }
                 DownloadSpec::Prefix(prefix) => {

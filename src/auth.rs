@@ -1,4 +1,4 @@
-//! Auth Manager: parser delle Connection String e provider Azure CLI.
+//! Auth manager: Connection String parser and Azure CLI provider.
 
 use crate::model::{AccountSource, AuthCredential, StorageAccountNode};
 use anyhow::{Context, Result, anyhow, bail};
@@ -18,7 +18,7 @@ const AZURITE_KEY: &str =
 // Connection String
 // ---------------------------------------------------------------------------
 
-/// Converte una connection string (o un SAS URL) in un nodo account "Attached".
+/// Convert a connection string (or SAS URL) into an "Attached" account node.
 pub fn parse_connection_string(profile_name: &str, cs: &str) -> Result<StorageAccountNode> {
     let t = cs.trim();
     if t.starts_with("https://") || t.starts_with("http://") {
@@ -28,7 +28,7 @@ pub fn parse_connection_string(profile_name: &str, cs: &str) -> Result<StorageAc
     for part in cs.trim().split(';').filter(|p| !p.trim().is_empty()) {
         let (k, v) = part
             .split_once('=')
-            .ok_or_else(|| anyhow!("segmento non valido: '{part}'"))?;
+            .ok_or_else(|| anyhow!("invalid segment: '{part}'"))?;
         kv.insert(k.trim().to_ascii_lowercase(), v.trim().to_string());
     }
     let get = |k: &str| kv.get(k).cloned().filter(|v| !v.is_empty());
@@ -78,7 +78,7 @@ pub fn parse_connection_string(profile_name: &str, cs: &str) -> Result<StorageAc
         .map(|e| e.trim_end_matches('/').to_string())
         .unwrap_or_default();
     if blob_endpoint.is_empty() && queue_endpoint.is_empty() {
-        bail!("AccountName o BlobEndpoint/QueueEndpoint mancanti");
+        bail!("AccountName or BlobEndpoint/QueueEndpoint is missing");
     }
 
     let name = account_name.clone().unwrap_or_else(|| {
@@ -99,7 +99,7 @@ pub fn parse_connection_string(profile_name: &str, cs: &str) -> Result<StorageAc
             sas.trim_start_matches('?').to_string(),
         ))
     } else {
-        bail!("AccountKey o SharedAccessSignature mancanti");
+        bail!("AccountKey or SharedAccessSignature is missing");
     };
 
     Ok(StorageAccountNode {
@@ -116,14 +116,14 @@ pub fn parse_connection_string(profile_name: &str, cs: &str) -> Result<StorageAc
     })
 }
 
-/// SAS URL (come "Attach with SAS URL" di Storage Explorer):
+/// SAS URL (as in Storage Explorer's "Attach with SAS URL"):
 /// - account SAS:   `https://acct.blob.core.windows.net/?sv=..&ss=bq&srt=sco&sig=..`
 /// - container SAS: `https://acct.blob.core.windows.net/<container>?sv=..&sr=c&sig=..`
 /// - queue SAS:     `https://acct.queue.core.windows.net/<queue>?sv=..&sig=..`
 ///
-/// Supporta anche gli URL path-style di Azurite (`http://127.0.0.1:10000/devstoreaccount1/...`).
+/// Also supports Azurite path-style URLs (`http://127.0.0.1:10000/devstoreaccount1/...`).
 pub fn parse_sas_url(profile_name: &str, raw: &str) -> Result<StorageAccountNode> {
-    let url = reqwest::Url::parse(raw).map_err(|e| anyhow!("URL non valido: {e}"))?;
+    let url = reqwest::Url::parse(raw).map_err(|e| anyhow!("invalid URL: {e}"))?;
     let sas = url
         .query()
         .unwrap_or("")
@@ -134,11 +134,11 @@ pub fn parse_sas_url(profile_name: &str, raw: &str) -> Result<StorageAccountNode
         .map(|(k, v)| (k.to_ascii_lowercase(), v.into_owned()))
         .collect();
     if !params.contains_key("sig") {
-        bail!("l'URL non contiene un SAS token (parametro 'sig' mancante)");
+        bail!("URL does not contain a SAS token (missing 'sig' parameter)");
     }
     let host = url
         .host_str()
-        .ok_or_else(|| anyhow!("host mancante"))?
+        .ok_or_else(|| anyhow!("missing host"))?
         .to_ascii_lowercase();
     let port = url.port().map(|p| format!(":{p}")).unwrap_or_default();
     let mut segs: Vec<String> = url
@@ -154,11 +154,11 @@ pub fn parse_sas_url(profile_name: &str, raw: &str) -> Result<StorageAccountNode
         })
         .unwrap_or_default();
 
-    // Path-style (Azurite / IP): il primo segmento è il nome account.
+    // Path-style (Azurite / IP): the first segment is the account name.
     let path_style = host.parse::<std::net::IpAddr>().is_ok() || host == "localhost";
     let (account, base) = if path_style {
         if segs.is_empty() {
-            bail!("URL path-style senza nome account");
+            bail!("path-style URL has no account name");
         }
         let acct = segs.remove(0);
         (
@@ -185,19 +185,19 @@ pub fn parse_sas_url(profile_name: &str, raw: &str) -> Result<StorageAccountNode
     } else if host.contains(".blob.") || host.contains(".dfs.") {
         Svc::Blob
     } else {
-        bail!("servizio non riconosciuto dall'host '{host}' (attesi *.blob.* o *.queue.*)");
+        bail!("unrecognized service for host '{host}' (expected *.blob.* or *.queue.*)");
     };
     let base = base.replace(".dfs.", ".blob.");
 
     let sr = params.get("sr").map(String::as_str).unwrap_or("");
     if matches!(sr, "b" | "bs" | "bv" | "d") || (svc == Svc::Blob && segs.len() > 1) {
         bail!(
-            "SAS a livello di singolo blob/directory non supportato: serve un SAS di account o di container"
+            "SAS for an individual blob/directory is not supported: an account- or container-level SAS is required"
         );
     }
     let resource = segs.first().cloned();
 
-    // Endpoint dell'altro servizio derivabile solo per account SAS non path-style.
+    // The other service's endpoint can only be derived for non-path-style account SAS.
     let other = |from: &str, to: &str| -> String {
         let ss = params.get("ss").map(String::as_str).unwrap_or("");
         let svc_char = if to == "queue" { 'q' } else { 'b' };
@@ -291,13 +291,13 @@ async fn run_az(args: &[&str]) -> Result<Vec<u8>> {
         .kill_on_drop(true)
         .output()
         .await
-        .context("impossibile eseguire `az` (Azure CLI installata e nel PATH?)")?;
+        .context("could not execute `az` (is Azure CLI installed and on PATH?)")?;
     if !out.status.success() {
         let err = String::from_utf8_lossy(&out.stderr);
         let first = err
             .lines()
             .find(|l| !l.trim().is_empty())
-            .unwrap_or("errore sconosciuto");
+            .unwrap_or("unknown error");
         bail!("az {}: {}", args.first().unwrap_or(&""), first.trim());
     }
     Ok(out.stdout)
@@ -316,7 +316,7 @@ pub async fn get_access_token(resource: &str, tenant: Option<&str>) -> Result<Cl
         args.extend(["--tenant", t]);
     }
     let raw: RawToken = serde_json::from_slice(&run_az(&args).await?)
-        .context("output di `az account get-access-token` non valido")?;
+        .context("invalid output from `az account get-access-token`")?;
     let expires_at = raw
         .expires_on_epoch
         .map(|e| UNIX_EPOCH + Duration::from_secs(e))
@@ -327,7 +327,7 @@ pub async fn get_access_token(resource: &str, tenant: Option<&str>) -> Result<Cl
     })
 }
 
-/// Restituisce lo user principal della sessione `az login` attiva.
+/// Return the user principal for the active `az login` session.
 pub async fn current_user() -> Result<String> {
     let v: serde_json::Value =
         serde_json::from_slice(&run_az(&["account", "show", "-o", "json"]).await?)?;
@@ -366,7 +366,7 @@ mod tests {
         assert!(n.queue_endpoint.is_empty());
         assert_eq!(n.fixed_containers, Some(vec!["my-container".to_string()]));
         assert_eq!(n.kind, "SAS container");
-        // Il token resta codificato così com'era nell'URL.
+        // The token remains encoded as it appeared in the URL.
         assert!(
             matches!(n.credential, Some(AuthCredential::SasToken(ref s)) if s.ends_with("sig=ab%2Fc%3D") && s.starts_with("sp="))
         );

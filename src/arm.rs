@@ -1,4 +1,4 @@
-//! ARM Discovery: Subscriptions, Storage Accounts e listKeys.
+//! ARM discovery: subscriptions, storage accounts, and listKeys.
 
 use crate::model::{AccountSource, StorageAccountNode, Subscription};
 use anyhow::{Result, bail};
@@ -23,7 +23,7 @@ async fn parse(resp: reqwest::Response) -> Result<Value> {
     Ok(serde_json::from_str(&body)?)
 }
 
-/// GET con paginazione `nextLink`.
+/// GET with `nextLink` pagination.
 async fn get_paged(http: &reqwest::Client, token: &str, url: String) -> Result<Vec<Value>> {
     let mut out = Vec::new();
     let mut next = Some(url);
@@ -101,7 +101,7 @@ pub async fn list_storage_accounts(
     Ok(out)
 }
 
-/// `POST .../listKeys` → valore di `key1` (o della prima chiave disponibile).
+/// `POST .../listKeys` → the value of `key1` (or the first available key).
 pub async fn list_keys(http: &reqwest::Client, token: &str, account_id: &str) -> Result<String> {
     let url = format!("{ARM}{account_id}/listKeys?api-version=2023-01-01");
     let resp = http
@@ -117,7 +117,7 @@ pub async fn list_keys(http: &reqwest::Client, token: &str, account_id: &str) ->
         .or_else(|| keys.first())
         .and_then(|k| k["value"].as_str())
         .map(str::to_string)
-        .ok_or_else(|| anyhow::anyhow!("listKeys: nessuna chiave restituita"))
+        .ok_or_else(|| anyhow::anyhow!("listKeys: no key returned"))
 }
 
 fn resource_group_of(id: &str) -> String {

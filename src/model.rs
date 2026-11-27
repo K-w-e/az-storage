@@ -1,7 +1,7 @@
-//! Modello dati condiviso tra UI e backend worker.
+//! Data model shared between the UI and backend worker.
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)] // campi da specifica, non tutti usati dalla UI
+#[allow(dead_code)] // Spec fields; not all are used by the UI.
 pub enum AccountSource {
     AzureSubscription {
         subscription_id: String,
@@ -16,9 +16,9 @@ pub enum AccountSource {
 
 #[derive(Clone)]
 pub enum AuthCredential {
-    /// Token ottenuto da Azure CLI per ARM / Data-Plane
+    /// Token obtained from Azure CLI for ARM / data plane.
     BearerToken(String),
-    /// Account Key o SAS estratta da ARM listKeys o da Connection String
+    /// Account key or SAS obtained from ARM listKeys or a Connection String.
     SharedKey {
         account_name: String,
         account_key: String,
@@ -37,7 +37,7 @@ impl AuthCredential {
 }
 
 impl std::fmt::Debug for AuthCredential {
-    // Mai stampare segreti.
+    // Never print secrets.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "AuthCredential({})", self.label())
     }
@@ -50,12 +50,12 @@ pub struct StorageAccountNode {
     pub kind: String,
     pub source: AccountSource,
     pub credential: Option<AuthCredential>,
-    /// Se false, l'account rifiuta SharedKey: usare direttamente Bearer.
+    /// If false, the account rejects SharedKey; use Bearer directly.
     pub allow_shared_key: bool,
     pub blob_endpoint: String,
     pub queue_endpoint: String,
-    /// SAS a livello di container/coda: niente List Containers/Queues,
-    /// l'albero mostra solo le risorse indicate.
+    /// Container/queue-level SAS: no List Containers/Queues;
+    /// the tree shows only the specified resources.
     pub fixed_containers: Option<Vec<String>>,
     pub fixed_queues: Option<Vec<String>>,
 }

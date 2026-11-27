@@ -1,4 +1,4 @@
-//! Stato UI e state machine (focus, albero risorse, modali).
+//! UI state and state machine (focus, resource tree, modals).
 
 use crate::auth;
 use crate::config::{self, AttachedAccount, Config};
@@ -16,7 +16,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 // ---------------------------------------------------------------------------
-// Tipi di stato
+// State types
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -141,7 +141,7 @@ impl TreeNode {
         self.detail = d.into();
         self
     }
-    /// Imposta i figli dopo un caricamento (o un placeholder se vuoto).
+    /// Set children after loading (or add a placeholder if empty).
     fn set_children(&mut self, children: Vec<TreeNode>) {
         self.children = if children.is_empty() {
             vec![TreeNode::info("(empty)")]
@@ -219,7 +219,7 @@ pub enum MainView {
     },
 }
 
-/// Ordinamento della lista blob (le cartelle restano sempre prima dei file).
+/// Blob list sorting (folders are always shown before files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SortMode {
     #[default]
@@ -248,15 +248,15 @@ impl SortMode {
     }
 }
 
-/// Contenuto di una cartella mostrato nel pannello preview (senza aprirla).
+/// Contents of a folder shown in the preview panel without opening it.
 pub enum DirPreview {
     Loading,
     Ready(Vec<Entry>),
     Failed(String),
 }
 
-/// Attesa prima di caricare la preview di una cartella (evita richieste
-/// a raffica scorrendo velocemente la lista).
+/// Delay before loading a folder preview (avoids repeated requests
+/// while scrolling quickly through the list).
 const DIR_PREVIEW_DELAY: Duration = Duration::from_millis(150);
 const DIR_CACHE_MAX: usize = 256;
 
@@ -283,11 +283,11 @@ pub struct App {
     pub modal: ModalState,
     pub main: MainView,
     pub main_state: ListState,
-    /// Filtro testuale sulla lista centrale (case-insensitive, termini in AND).
+    /// Text filter for the main list (case-insensitive, terms combined with AND).
     pub filter: String,
     pub filter_editing: bool,
     pub sort: SortMode,
-    /// Cache delle preview cartella, chiave `account/container/prefix`.
+    /// Folder preview cache, keyed by `account/container/prefix`.
     pub dir_cache: HashMap<String, DirPreview>,
     dir_sel: Option<(String, Instant)>,
     pub preview_key: Option<String>,
@@ -299,7 +299,7 @@ pub struct App {
     pub spinner: usize,
     pub should_quit: bool,
     pub mouse_enabled: bool,
-    /// Aree cliccabili calcolate all'ultimo render.
+    /// Clickable areas calculated during the last render.
     pub hit: HitAreas,
     last_click: Option<(Instant, ActivePanel, usize)>,
     pub transfers: BTreeMap<u64, TransferProgress>,
@@ -480,7 +480,7 @@ impl App {
         self.tree_key = Some(self.node_at(&rows[idx].path).key.clone());
     }
 
-    /// Dopo modifiche all'albero, ri-aggancia la selezione alla chiave salvata.
+    /// After tree changes, restore the selection using the saved key.
     fn sync_tree_sel(&mut self) {
         let rows = self.rows();
         if let Some(k) = &self.tree_key
@@ -493,7 +493,7 @@ impl App {
         self.select_tree(i);
     }
 
-    /// Comando di caricamento lazy per un nodo espandibile.
+    /// Lazy-load command for an expandable node.
     fn load_cmd(&self, key: &NodeKey) -> Option<Command> {
         match key {
             NodeKey::SubsRoot => Some(Command::DiscoverCli),
@@ -596,7 +596,7 @@ impl App {
         self.preview_scroll = 0;
     }
 
-    /// Totale elementi caricati (senza filtro).
+    /// Total number of loaded items (without filtering).
     pub fn main_total(&self) -> usize {
         match &self.main {
             MainView::Empty => 0,
@@ -605,7 +605,7 @@ impl App {
         }
     }
 
-    /// Indici (in `entries`/`messages`) visibili dopo filtro e ordinamento.
+    /// Indices (in `entries`/`messages`) visible after filtering and sorting.
     pub fn visible(&self) -> Vec<usize> {
         let terms: Vec<String> = self
             .filter
@@ -679,7 +679,7 @@ impl App {
         }
     }
 
-    /// Chiave cache della cartella selezionata nella lista centrale.
+    /// Cache key for the folder selected in the main list.
     pub fn selected_dir_key(&self) -> Option<String> {
         let MainView::Blobs {
             account_id,
@@ -695,7 +695,7 @@ impl App {
         }
     }
 
-    /// Chiamato periodicamente: carica (con debounce) la preview della cartella selezionata.
+    /// Called periodically: loads a preview of the selected folder (with debounce).
     pub fn tick(&mut self) -> Vec<Command> {
         let Some(key) = self.selected_dir_key() else {
             self.dir_sel = None;
@@ -747,7 +747,7 @@ impl App {
         self.filter_editing = false;
     }
 
-    /// Dopo una modifica del filtro: seleziona il primo risultato (saltando "..").
+    /// After a filter change, select the first result (skipping "..").
     fn on_filter_changed(&mut self) {
         let v = self.visible();
         let skip_parent = matches!(
@@ -1148,7 +1148,7 @@ impl App {
         }
     }
 
-    /// Ricarica la vista blob aperta senza cambiare focus/preview.
+    /// Reload the open blob view without changing focus or preview.
     fn reload_blobs_quiet(&mut self, acct: &str, cont: &str) -> Vec<Command> {
         let MainView::Blobs {
             account_id,
@@ -1214,7 +1214,7 @@ impl App {
     fn detach(&mut self, profile: &str) {
         self.config.attached_accounts.retain(|a| a.name != profile);
         if let Err(e) = config::save(&self.config) {
-            self.modal = ModalState::ErrorPopup(format!("Salvataggio config fallito: {e:#}"));
+            self.modal = ModalState::ErrorPopup(format!("Failed to save config: {e:#}"));
             return;
         }
         let id = format!("attached:{profile}");
@@ -1282,13 +1282,12 @@ impl App {
 
     pub fn on_paste(&mut self, text: String) {
         if self.filter_editing && matches!(self.modal, ModalState::None) {
-            self.filter
-                .extend(text.chars().filter(|c| !c.is_control()));
+            self.filter.extend(text.chars().filter(|c| !c.is_control()));
             self.on_filter_changed();
             return;
         }
         if let ModalState::TransferDialog(f) = &mut self.modal {
-            // Drag & drop da Finder incolla il path (con escape/virgolette).
+            // Drag and drop from Finder pastes the path (with escaping/quotes).
             f.path = clean_dropped_path(&text);
             f.error = None;
             return;
@@ -1502,7 +1501,7 @@ impl App {
             }
             ModalState::TransferDialog(_) => return vec![],
             ModalState::AddConnectionStringDialog(f) => {
-                // Click esterni ignorati per non perdere l'input digitato.
+                // Ignore clicks outside the form to avoid losing typed input.
                 if left_down
                     && let Some(i) = self.hit.form_fields.iter().position(|r| r.contains(pos))
                 {
@@ -1555,7 +1554,7 @@ impl App {
             let arrow_x = h.tree_list.x + (row.depth * 2) as u16;
             self.select_tree(idx);
             let double = self.is_double(ActivePanel::SidebarTree, idx);
-            // Click sulla freccia ▸/▾: espandi/comprimi.
+            // Click the ▸/▾ arrow to expand/collapse.
             if !self.node_at(&path).leaf && (arrow_x..arrow_x + 2).contains(&pos.x) {
                 self.last_click = None;
                 return self.toggle_node(&path, None);
@@ -1727,7 +1726,7 @@ impl App {
             Event::CliUser(Err(e)) => {
                 self.cli = CliState::Unavailable(e.clone());
                 if let Some(n) = self.find(&NodeKey::SubsRoot) {
-                    n.set_error(&format!("az login non attivo: {e}"));
+                    n.set_error(&format!("az login is not active: {e}"));
                 }
             }
             Event::Subscriptions(r) => {
@@ -1749,7 +1748,7 @@ impl App {
                         _ => {}
                     }
                 }
-                // Con una sola subscription la si espande automaticamente.
+                // Automatically expand the tree when there is only one subscription.
                 if let Ok(subs) = &r
                     && subs.len() == 1
                 {
@@ -1990,7 +1989,7 @@ pub fn abbreviate(p: &Path) -> String {
     }
 }
 
-/// Normalizza un path incollato/trascinato: virgolette, escape `\ `, file://.
+/// Normalize a pasted/dropped path: quotes, `\ ` escapes, and file:// URLs.
 pub fn clean_dropped_path(s: &str) -> String {
     let t = s.trim();
     let t = t
@@ -2029,7 +2028,7 @@ fn dir_key(account_id: &str, container: &str, prefix: &str) -> String {
     format!("{account_id}/{container}/{prefix}")
 }
 
-/// Ordina le voci di una cartella secondo `sort` (cartelle prima).
+/// Sort folder entries according to `sort` (folders first).
 pub fn sorted_entries(entries: &[Entry], sort: SortMode) -> Vec<&Entry> {
     let mut v: Vec<&Entry> = entries
         .iter()
@@ -2039,7 +2038,7 @@ pub fn sorted_entries(entries: &[Entry], sort: SortMode) -> Vec<&Entry> {
     v
 }
 
-/// Nome relativo al prefisso corrente (quello mostrato in lista).
+/// Name relative to the current prefix (the part shown in the list).
 pub fn rel_name<'a>(name: &'a str, prefix: &str) -> &'a str {
     name.get(prefix.len()..)
         .filter(|_| name.starts_with(prefix))
@@ -2123,14 +2122,14 @@ fn pretty_json(s: &str) -> Option<String> {
         .and_then(|v| serde_json::to_string_pretty(&v).ok())
 }
 
-/// Testo (JSON formattato se possibile) o hex dump per contenuti binari.
+/// Text (pretty-printed JSON when possible) or a hex dump for binary content.
 pub fn render_bytes(_name: &str, data: &[u8]) -> String {
     if data.is_empty() {
         return "(empty blob)".into();
     }
     let text = match std::str::from_utf8(data) {
         Ok(s) => Some(s.to_string()),
-        // Il troncamento a 512 KB può spezzare un carattere multibyte.
+        // Truncating at 512 KB may split a multibyte character.
         Err(e) if e.valid_up_to() + 4 >= data.len() => {
             Some(String::from_utf8_lossy(&data[..e.valid_up_to()]).into_owned())
         }
@@ -2170,7 +2169,7 @@ fn hexdump(data: &[u8]) -> String {
     out
 }
 
-/// Decodifica il corpo di un messaggio di coda (spesso base64 dagli SDK).
+/// Decode a queue message body (often base64-encoded by SDKs).
 pub fn decode_message(text: &str) -> (String, bool) {
     let t = text.trim();
     let looks_b64 = !t.is_empty()
@@ -2237,7 +2236,7 @@ mod tests {
         assert_eq!(app.visible(), vec![0, 1, 2, 3, 4]);
         app.filter = "LOG".into();
         assert_eq!(app.visible(), vec![0, 1, 3]);
-        app.filter = "p/".into(); // il prefisso non conta nel match
+        app.filter = "p/".into(); // the prefix does not count as a match
         assert_eq!(app.visible(), vec![0]);
     }
 

@@ -1,7 +1,7 @@
-//! Persistenza degli "Attached Accounts" in
+//! Persistence for "Attached Accounts" in
 //! `~/Library/Application Support/azure-storage-tui/config.json`.
-//! Il percorso legacy resta invariato in az-storage per mantenere accessibili
-//! gli account già salvati, senza migrazioni né modifiche al formato.
+//! The legacy path remains unchanged in az-storage to keep existing accounts
+//! accessible, without migrations or format changes.
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -20,7 +20,7 @@ pub struct AttachedAccount {
 }
 
 pub fn path() -> PathBuf {
-    // Su macOS `data_dir()` == ~/Library/Application Support
+    // On macOS, `data_dir()` == ~/Library/Application Support
     let base = directories::BaseDirs::new()
         .map(|d| d.data_dir().to_path_buf())
         .unwrap_or_else(|| PathBuf::from("."));
@@ -50,7 +50,7 @@ pub fn save(cfg: &Config) -> Result<()> {
     std::fs::rename(&tmp, &p)?;
     #[cfg(unix)]
     {
-        // Il file contiene segreti (AccountKey / SAS): solo owner.
+        // The file contains secrets (AccountKey / SAS): owner access only.
         use std::os::unix::fs::PermissionsExt;
         let _ = std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o600));
     }

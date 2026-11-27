@@ -542,7 +542,7 @@ fn draw_preview(f: &mut Frame, app: &mut App, area: Rect) {
         return;
     }
 
-    // Scroll per righe logiche del body: si renderizza solo la porzione visibile.
+    // Scroll by logical body lines; only the visible portion is rendered.
     let max = body.len().saturating_sub(1) as u16;
     app.preview_scroll = app.preview_scroll.min(max);
     let avail = (inner.height as usize).saturating_sub(header.len());
@@ -817,7 +817,7 @@ fn input(f: &mut Frame, area: Rect, label: &str, value: &str, active: bool, secr
         .border_style(style)
         .title(format!(" {label} "));
     let w = block.inner(area).width.saturating_sub(1) as usize;
-    // Maschera le chiavi: mostra solo la coda del valore se non è attivo.
+    // Mask keys: show only the value's tail when the field is inactive.
     let shown: String = if secret && !active {
         mask_secret(value)
     } else {
@@ -833,7 +833,7 @@ fn input(f: &mut Frame, area: Rect, label: &str, value: &str, active: bool, secr
 }
 
 fn mask_secret(cs: &str) -> String {
-    // SAS URL: nasconde la firma.
+    // SAS URL: hide the signature.
     if let Some((base, q)) = cs.split_once('?')
         && cs.starts_with("http")
     {

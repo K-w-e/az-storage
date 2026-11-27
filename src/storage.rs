@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 pub const API_VERSION: &str = "2023-11-03";
 pub const PREVIEW_BYTES: u64 = 512 * 1024;
-/// Sotto questa soglia l'upload usa una singola Put Blob.
+/// Below this threshold, uploads use a single Put Blob.
 pub const SINGLE_PUT_MAX: u64 = 32 * 1024 * 1024;
 pub const BLOCK_SIZE: usize = 8 * 1024 * 1024;
 
@@ -40,7 +40,7 @@ pub fn content_type_for(name: &str) -> &'static str {
     }
 }
 
-/// Endpoint di servizio + credenziale usata per firmare le richieste.
+/// Service endpoint and credential used to sign requests.
 pub struct Target<'a> {
     pub endpoint: &'a str,
     pub cred: &'a AuthCredential,
@@ -50,7 +50,7 @@ pub struct Target<'a> {
 // SharedKey (HMAC-SHA256)
 // ---------------------------------------------------------------------------
 
-/// Header HTTP standard che entrano nella StringToSign.
+/// Standard HTTP headers included in the StringToSign.
 #[derive(Default)]
 pub struct StdHeaders<'a> {
     pub content_length: &'a str,
@@ -101,7 +101,7 @@ pub fn string_to_sign(
 pub fn sign(account_key: &str, sts: &str) -> Result<String> {
     let key = B64
         .decode(account_key.trim())
-        .context("AccountKey non è base64 valido")?;
+        .context("AccountKey is not valid base64")?;
     let mut mac = Hmac::<Sha256>::new_from_slice(&key).map_err(|e| anyhow!("{e}"))?;
     mac.update(sts.as_bytes());
     Ok(B64.encode(mac.finalize().into_bytes()))
@@ -140,8 +140,8 @@ impl StorageClient {
             .await
     }
 
-    /// Esegue una richiesta firmata. `path` è il path risorsa non codificato
-    /// (es. "/container/dir/file.json"), `query` coppie non codificate.
+    /// Executes a signed request. `path` is the unencoded resource path
+    /// (e.g. "/container/dir/file.json"), and `query` contains unencoded pairs.
     #[allow(clippy::too_many_arguments)]
     async fn raw_body(
         &self,
@@ -153,8 +153,8 @@ impl StorageClient {
         body: Option<Vec<u8>>,
         if_none_match: Option<&str>,
     ) -> Result<Response> {
-        let base = Url::parse(t.endpoint)
-            .with_context(|| format!("endpoint non valido: {}", t.endpoint))?;
+        let base =
+            Url::parse(t.endpoint).with_context(|| format!("invalid endpoint: {}", t.endpoint))?;
         let url_path = format!("{}{}", base.path().trim_end_matches('/'), encode_path(path));
         let query: Vec<(String, String)> = query
             .iter()
@@ -284,7 +284,7 @@ impl StorageClient {
         self.list_blobs_inner(t, container, prefix, true).await
     }
 
-    /// Elenco ricorsivo (senza delimiter) di tutti i blob sotto `prefix`.
+    /// Recursively lists all blobs under `prefix` (without a delimiter).
     pub async fn list_blobs_flat(
         &self,
         t: &Target<'_>,
@@ -358,7 +358,7 @@ impl StorageClient {
 
     // ---------------------------- Transfers --------------------------------
 
-    /// Scarica un blob in streaming su `dest` (via file `.part` + rename).
+    /// Stream a blob to `dest` (via a `.part` file followed by a rename).
     pub async fn download_blob(
         &self,
         t: &Target<'_>,
@@ -379,7 +379,7 @@ impl StorageClient {
         let tmp = dest.with_file_name(format!(".{fname}.part"));
         let mut file = tokio::fs::File::create(&tmp)
             .await
-            .with_context(|| format!("creazione {}", tmp.display()))?;
+            .with_context(|| format!("creating {}", tmp.display()))?;
         let mut stream = resp.bytes_stream();
         let res: Result<()> = async {
             while let Some(chunk) = stream.next().await {
@@ -407,7 +407,7 @@ impl StorageClient {
         }
     }
 
-    /// Get Blob Properties (HEAD): `None` se il blob non esiste, altrimenti la size.
+    /// Get Blob Properties (HEAD): `None` if the blob does not exist, otherwise its size.
     pub async fn blob_size(
         &self,
         t: &Target<'_>,
@@ -430,9 +430,9 @@ impl StorageClient {
         ))
     }
 
-    /// Carica un file locale come Block Blob. File piccoli con una singola
-    /// Put Blob, file grandi a blocchi (Put Block + Put Block List).
-    /// Restituisce `false` se il blob esiste e `overwrite` è disattivo.
+    /// Uploads a local file as a Block Blob. Small files use a single
+    /// Put Blob; large files are uploaded in blocks (Put Block + Put Block List).
+    /// Returns `false` if the blob exists and `overwrite` is disabled.
     #[allow(clippy::too_many_arguments)]
     pub async fn upload_file(
         &self,
@@ -448,7 +448,7 @@ impl StorageClient {
         let path = format!("/{container}/{name}");
         let size = tokio::fs::metadata(src)
             .await
-            .with_context(|| format!("lettura {}", src.display()))?
+            .with_context(|| format!("reading {}", src.display()))?
             .len();
         let ctype = ("x-ms-blob-content-type", content_type_for(name).to_string());
         let inm = (!overwrite).then_some("*");
@@ -532,7 +532,7 @@ impl StorageClient {
             .raw(Method::GET, t, &path, &[], &[("x-ms-range", range)])
             .await?;
         if resp.status() == StatusCode::RANGE_NOT_SATISFIABLE {
-            // Blob vuoto.
+            // Empty blob.
             return Ok(BlobPreview {
                 data: Vec::new(),
                 truncated: false,
@@ -592,7 +592,7 @@ impl StorageClient {
         Ok(self.queues_with_counts(t, names).await)
     }
 
-    /// Conteggio approssimato dei messaggi (Get Queue Metadata) in parallelo.
+    /// Approximate message count (Get Queue Metadata), fetched in parallel.
     pub async fn queues_with_counts(&self, t: &Target<'_>, names: Vec<String>) -> Vec<QueueInfo> {
         let counts = futures::future::join_all(names.iter().map(|n| self.queue_count(t, n))).await;
         names
@@ -619,7 +619,7 @@ impl StorageClient {
             .get("x-ms-approximate-messages-count")
             .and_then(|v| v.to_str().ok())
             .and_then(|v| v.parse().ok())
-            .ok_or_else(|| anyhow!("count mancante"))
+            .ok_or_else(|| anyhow!("message count is missing"))
     }
 
     pub async fn peek_messages(&self, t: &Target<'_>, queue: &str) -> Result<Vec<QueueMessage>> {
@@ -662,9 +662,9 @@ impl StorageClient {
             .collect())
     }
 
-    /// Peek non restituisce il `popreceipt`: per eliminare un messaggio
-    /// specifico lo si recupera con Get Messages (visibilità breve), si
-    /// elimina il target e si rendono subito visibili gli altri.
+    /// Peek does not return the `popreceipt`: to delete a specific message,
+    /// retrieve it with Get Messages (brief visibility), delete the target,
+    /// and immediately make the other messages visible again.
     pub async fn delete_message(&self, t: &Target<'_>, queue: &str, id: &str) -> Result<()> {
         for _ in 0..16 {
             let q = [
@@ -700,7 +700,7 @@ impl StorageClient {
                 return Ok(());
             }
         }
-        bail!("messaggio {id} non trovato (già consumato o invisibile)")
+        bail!("message {id} not found (already consumed or invisible)")
     }
 
     pub async fn clear_queue(&self, t: &Target<'_>, queue: &str) -> Result<()> {
@@ -779,7 +779,7 @@ pub fn parse_xml(s: &str) -> Result<XmlNode> {
                 let n = stack.pop().unwrap();
                 match stack.last_mut() {
                     Some(p) => p.children.push(n),
-                    None => bail!("XML malformato"),
+                    None => bail!("malformed XML"),
                 }
             }
             Event::Text(t) => {
@@ -797,12 +797,12 @@ pub fn parse_xml(s: &str) -> Result<XmlNode> {
             _ => {}
         }
     }
-    // Restituisce l'elemento radice del documento.
-    let mut root = stack.pop().ok_or_else(|| anyhow!("XML vuoto"))?;
+    // Return the document's root element.
+    let mut root = stack.pop().ok_or_else(|| anyhow!("empty XML"))?;
     if root.children.len() == 1 {
         Ok(root.children.pop().unwrap())
     } else {
-        bail!("XML senza radice")
+        bail!("XML has no root element")
     }
 }
 
@@ -812,7 +812,7 @@ mod tests {
 
     #[test]
     fn signature_matches_known_vector() {
-        // StringToSign costruita manualmente secondo la documentazione.
+        // StringToSign assembled manually according to the documentation.
         let ms = vec![
             ("x-ms-version".to_string(), "2023-11-03".to_string()),
             (
@@ -839,7 +839,7 @@ mod tests {
         assert!(sign("a2V5", &sts).is_ok());
     }
 
-    /// Richiede Azurite in ascolto: `cargo test -- --ignored azurite`
+    /// Requires Azurite to be running: `cargo test -- --ignored azurite`
     #[tokio::test]
     #[ignore]
     async fn azurite_roundtrip() {
@@ -880,7 +880,7 @@ mod tests {
         c.delete_blob(&b, &cs[0], blob).await.unwrap();
     }
 
-    /// Upload (singolo + a blocchi) e download su Azurite.
+    /// Upload (single and block) and download against Azurite.
     #[tokio::test]
     #[ignore]
     async fn azurite_transfer() {
@@ -911,7 +911,7 @@ mod tests {
                 .unwrap()
             );
             assert_eq!(sent, size as u64);
-            // Senza overwrite deve essere saltato.
+            // Without overwrite, the existing blob should be skipped.
             assert!(
                 !c.upload_file(&b, "demo", &format!("up/{name}"), &src, false, &no, |_| {})
                     .await
@@ -932,7 +932,7 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
-    /// Read-only su Azure reale (richiede `az login`): `cargo test -- --ignored azure_live`
+    /// Read-only test against live Azure (requires `az login`): `cargo test -- --ignored azure_live`
     #[tokio::test]
     #[ignore]
     async fn azure_live_readonly() {
