@@ -11,6 +11,8 @@ use std::path::PathBuf;
 pub struct Config {
     #[serde(default)]
     pub attached_accounts: Vec<AttachedAccount>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub nerd_font_icons: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

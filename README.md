@@ -14,6 +14,12 @@ Terminal UI for exploring and managing Azure Storage Accounts (Blob Containers a
 - **Keyboard and mouse support**: click to focus/expand/select, scroll with mouse wheel, or press `m` to toggle mouse capture for native terminal text selection.
 - **Non-blocking architecture**: Azure CLI subprocesses, ARM discovery, and data-plane REST calls run on a dedicated Tokio worker thread.
 
+## Screenshots
+
+![Blob browser](docs/screenshot-blobs.png)
+
+![Queue messages](docs/screenshot-queue.png)
+
 ## Installation
 
 ### Prerequisites
@@ -63,6 +69,13 @@ Example `config.json`:
 ```
 
 Attached accounts can also be added (`a`) and detached (`d` on an attached account in the sidebar) directly from the UI.
+
+### Icons
+
+Icons use standard Unicode symbols, which render with any monospace font. If your terminal uses a
+[Nerd Font](https://www.nerdfonts.com/), you can switch to Nerd Font glyphs with `"nerd_font_icons": true`
+in `config.json` or with the `AZ_STORAGE_ICONS=nerd` environment variable (`AZ_STORAGE_ICONS=unicode`
+forces the default set). Without a Nerd Font those glyphs appear as missing-character boxes.
 
 ## Controls
 

@@ -1,5 +1,6 @@
 //! Rendering ratatui.
 
+use crate::icons::icons;
 use crate::app::*;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
@@ -174,18 +175,21 @@ fn draw_tree(f: &mut Frame, app: &mut App, area: Rect) {
             };
             let (icon, style) = match &n.key {
                 NodeKey::SubsRoot | NodeKey::AttachedRoot => ("", Style::new().bold()),
-                NodeKey::Sub(_) => ("󰄦 ", Style::new().fg(Color::LightBlue)),
-                NodeKey::Account(_) => ("󰋊 ", Style::new().fg(Color::LightGreen)),
+                NodeKey::Sub(_) => (icons().subscription, Style::new().fg(Color::LightBlue)),
+                NodeKey::Account(_) => (icons().account, Style::new().fg(Color::LightGreen)),
                 NodeKey::Blobs(_) | NodeKey::Queues(_) => ("", Style::new()),
-                NodeKey::Container(..) => ("󰆧 ", Style::new()),
-                NodeKey::Queue(..) => ("󰁕 ", Style::new()),
+                NodeKey::Container(..) => (icons().container, Style::new()),
+                NodeKey::Queue(..) => (icons().queue, Style::new()),
                 NodeKey::Info(t) if t.starts_with('✗') => ("", Style::new().fg(Color::Red)),
                 NodeKey::Info(_) => ("", Style::new().fg(Color::DarkGray).italic()),
             };
             let mut spans = vec![
                 Span::raw(indent),
                 Span::styled(arrow, Style::new().fg(Color::DarkGray)),
-                Span::styled(format!("{icon}{}", n.label), style),
+                Span::styled(
+                    if icon.is_empty() { n.label.clone() } else { format!("{icon} {}", n.label) },
+                    style,
+                ),
             ];
             if !n.detail.is_empty() {
                 spans.push(Span::styled(
@@ -247,7 +251,7 @@ fn draw_main(f: &mut Frame, app: &mut App, area: Rect) {
                         ListItem::new(Line::from(".. (Parent Directory)").fg(Color::DarkGray))
                     }
                     Entry::Dir(d) => ListItem::new(Line::from(vec![
-                        Span::styled("󰉋 ", Style::new().fg(Color::Yellow)),
+                        Span::styled(format!("{} ", icons().dir), Style::new().fg(Color::Yellow)),
                         Span::styled(
                             d[prefix.len()..].to_string(),
                             Style::new().fg(Color::Yellow),
@@ -260,7 +264,7 @@ fn draw_main(f: &mut Frame, app: &mut App, area: Rect) {
                             .saturating_sub(2 + name.chars().count() + size.len())
                             .max(1);
                         ListItem::new(Line::from(vec![
-                            Span::raw("󰈚 "),
+                            Span::raw(format!("{} ", icons().file)),
                             Span::raw(name.to_string()),
                             Span::raw(" ".repeat(pad)),
                             Span::styled(size, Style::new().fg(Color::DarkGray)),
@@ -269,7 +273,7 @@ fn draw_main(f: &mut Frame, app: &mut App, area: Rect) {
                 })
                 .collect();
             (
-                format!("󰆧 {container}/{prefix} · sort: {}", app.sort.label()),
+                format!("{} {container}/{prefix} · sort: {}", icons().container, app.sort.label()),
                 items,
                 *loading,
                 error.clone(),
@@ -305,7 +309,7 @@ fn draw_main(f: &mut Frame, app: &mut App, area: Rect) {
                 })
                 .collect();
             (
-                format!("󰁕 {queue} (peek · max 32)"),
+                format!("{} {queue} (peek · max 32)", icons().queue),
                 items,
                 *loading,
                 error.clone(),
@@ -485,7 +489,7 @@ fn draw_preview(f: &mut Frame, app: &mut App, area: Rect) {
                         for e in items {
                             match e {
                                 Entry::Dir(sub) => body.push(Line::from(vec![
-                                    Span::styled("󰉋 ", Style::new().fg(Color::Yellow)),
+                                    Span::styled(format!("{} ", icons().dir), Style::new().fg(Color::Yellow)),
                                     Span::styled(
                                         rel_name(sub, d).to_string(),
                                         Style::new().fg(Color::Yellow),
@@ -498,7 +502,7 @@ fn draw_preview(f: &mut Frame, app: &mut App, area: Rect) {
                                         .saturating_sub(2 + name.chars().count() + size.len())
                                         .max(1);
                                     body.push(Line::from(vec![
-                                        Span::raw("󰈚 "),
+                                        Span::raw(format!("{} ", icons().file)),
                                         Span::raw(name.to_string()),
                                         Span::raw(" ".repeat(pad)),
                                         Span::styled(size, Style::new().fg(Color::DarkGray)),

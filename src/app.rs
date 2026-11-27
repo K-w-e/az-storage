@@ -2,6 +2,7 @@
 
 use crate::auth;
 use crate::config::{self, AttachedAccount, Config};
+use crate::icons::icons;
 use crate::model::*;
 use crate::worker::{Command, DownloadSpec, Event, TransferProgress};
 use base64::Engine;
@@ -156,7 +157,7 @@ impl TreeNode {
         self.expanded = true;
     }
     fn set_loading(&mut self) {
-        self.children = vec![TreeNode::info("⏳ loading…")];
+        self.children = vec![TreeNode::info(format!("{} loading…", icons().loading))];
         self.load = Load::Loading;
         self.expanded = true;
     }
@@ -340,14 +341,14 @@ fn account_node(acct: &StorageAccountNode) -> TreeNode {
     if !acct.blob_endpoint.is_empty() {
         n.children.push(TreeNode::new(
             NodeKey::Blobs(id.clone()),
-            "󰆼 Blob Containers",
+            format!("{} Blob Containers", icons().blobs),
             false,
         ));
     }
     if !acct.queue_endpoint.is_empty() {
         n.children.push(TreeNode::new(
             NodeKey::Queues(id.clone()),
-            "󰒲 Storage Queues",
+            format!("{} Storage Queues", icons().queues),
             false,
         ));
     }
@@ -359,13 +360,13 @@ impl App {
     pub fn new(config: Config, busy: Arc<AtomicUsize>) -> (Self, Vec<Command>) {
         let mut subs_root = TreeNode::new(
             NodeKey::SubsRoot,
-            "󰌒 Azure Subscriptions (Azure CLI)",
+            format!("{} Azure Subscriptions (Azure CLI)", icons().subs_root),
             false,
         );
         subs_root.set_loading();
         let mut attached = TreeNode::new(
             NodeKey::AttachedRoot,
-            "󰌷 Attached Storage Accounts (Local Config)",
+            format!("{} Attached Storage Accounts (Local Config)", icons().attached_root),
             false,
         );
         attached.expanded = true;

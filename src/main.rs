@@ -2,6 +2,7 @@ mod app;
 mod arm;
 mod auth;
 mod config;
+mod icons;
 mod model;
 mod storage;
 mod ui;
@@ -26,6 +27,7 @@ use worker::{Command, Event};
 async fn main() -> Result<()> {
     // Load config before entering TUI mode (errors remain readable in the shell).
     let config = config::load()?;
+    icons::init(config.nerd_font_icons);
 
     let busy = Arc::new(AtomicUsize::new(0));
     let (tx_cmd, rx_cmd) = mpsc::unbounded_channel::<Command>();
